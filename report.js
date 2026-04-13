@@ -2,12 +2,19 @@ const nodemailer = require("nodemailer");
 
 const SHOPIFY_STORE = "0a17b5.myshopify.com";
 const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;
-const GMAIL_USER = process.env.GMAIL_USER;       // your@gmail.com
-const GMAIL_PASS = process.env.GMAIL_APP_PASS;   // Gmail App Password
-const REPORT_TO  = process.env.REPORT_TO;        // recipient email
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_PASS = process.env.GMAIL_APP_PASS;
+const REPORT_TO = process.env.REPORT_TO;
 
-async function fetchOrders(fulfillment_status) {
-  const url = `https://${SHOPIFY_STORE}/admin/api/2024-01/orders.json?status=open&fulfillment_status=${fulfillment_status}&limit=250`;
+function getDaysAgo(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
+
+async function fetchOrders(params) {
+  const query = new URLSearchParams(params).toString();
+  const url = `https://${SHOPIFY_STORE}/admin/api/2026-04/orders.json?${query}`;
   const res = await fetch(url, {
     headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN }
   });
@@ -16,46 +23,109 @@ async function fetchOrders(fulfillment_status) {
 }
 
 function buildTable(orders) {
-  if (!orders.length) return "<p>None</p>";
+  if (!orders.length) return "<p style='color:#888'>None</p>";
   return `
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:sans-serif;font-size:13px">
+    <table border="1" cellpadding="8" cellspacing="0" 
+      style="border-collapse:collapse;font-family:sans-serif;font-size:13px;width:100%">
       <thead style="background:#f0f0f0">
-        <tr><th>Order</th><th>Customer</th><th>Email</th><th>Total</th><th>Created</th><th>Status</th></tr>
+        <tr>
+          <th>Order ID</th>
+          <th>Customer Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Shipping Address</th>
+          <th>Total Amount</th>
+          <th>Order Date</th>
+          <th>Status</th>
+        </tr>
       </thead>
       <tbody>
-        ${orders.map(o => `
-          <tr>
-            <td><a href="https://${SHOPIFY_STORE}/admin/orders/${o.id}">#${o.order_number}</a></td>
-            <td>${o.billing_address?.name || "—"}</td>
-            <td>${o.email || "—"}</td>
-            <td>${o.currency} ${o.total_price}</td>
-            <td>${new Date(o.created_at).toLocaleDateString()}</td>
-            <td>${o.fulfillment_status || "unfulfilled"}</td>
-          </tr>`).join("")}
+        ${orders.map(o => {
+          const addr = o.shipping_address;
+          const fullAddress = addr
+            ? [addr.address1, addr.address2, addr.city, addr.province, addr.zip, addr.country]
+                .filter(Boolean).join(", ")
+            : "—";
+          return `
+            <tr>
+              <td><a href="https://${SHOPIFY_STORE}/admin/orders/${o.id}">#${o.order_number}</a></td>
+              <td>${addr?.name || o.billing_address?.name || "—"}</td>
+              <td>${o.email || "—"}</td>
+              <td>${addr?.phone || o.phone || "—"}</td>
+              <td>${fullAddress}</td>
+              <td>${o.currency} ${o.total_price}</td>
+              <td>${new Date(o.created_at).toLocaleDateString("en-IN")}</td>
+              <td>${o.fulfillment_status || "unfulfilled"}</td>
+            </tr>`;
+        }).join("")}
       </tbody>
     </table>`;
 }
 
 async function main() {
-  const [unfulfilled, partial] = await Promise.all([
-    fetchOrders("unfulfilled"),
-    fetchOrders("partial")
-  ]);
+  const thirtyDaysAgo = getDaysAgo(30);
+  const sevenDaysAgo  = getDaysAgo(7);
 
-  // Also fetch orders tagged as delivery_failed
-  const failedRes = await fetch(
-    `https://${SHOPIFY_STORE}/admin/api/2024-01/orders.json?status=any&tag=delivery_failed&limit=250`,
-    { headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN } }
-  );
-  const failedData = await failedRes.json();
-  const failed = failedData.orders || [];
+  // 1. Unfulfilled orders — past 30 days
+  const unfulfilled = await fetchOrders({
+    status: "open",
+    fulfillment_status: "unfulfilled",
+    created_at_min: thirtyDaysAgo,
+    limit: 250
+  });
+
+  // 2. Partially fulfilled orders — past 30 days
+  const partial = await fetchOrders({
+    status: "open",
+    fulfillment_status: "partial",
+    created_at_min: thirtyDaysAgo,
+    limit: 250
+  });
+
+  // 3. Failed delivery — tagged 'delivery_failed', past 30 days
+  const failed = await fetchOrders({
+    status: "any",
+    tag: "delivery_failed",
+    created_at_min: thirtyDaysAgo,
+    limit: 250
+  });
+
+  // 4. Fulfilled but not delivered — placed 7-30 days ago, still open
+  const fulfilledNotDelivered = await fetchOrders({
+    status: "open",
+    fulfillment_status: "shipped",
+    created_at_min: thirtyDaysAgo,
+    created_at_max: sevenDaysAgo,
+    limit: 250
+  });
 
   const today = new Date().toDateString();
+
+  const section = (emoji, title, color, count, table) => `
+    <h3 style="color:${color};margin-top:30px">${emoji} ${title} (${count})</h3>
+    ${table}
+  `;
+
   const html = `
-    <h2>📦 Daily Order Report — ${today}</h2>
-    <h3>🔴 Unfulfilled (${unfulfilled.length})</h3>${buildTable(unfulfilled)}
-    <h3>🟡 Partially Fulfilled (${partial.length})</h3>${buildTable(partial)}
-    <h3>❌ Failed Delivery (${failed.length})</h3>${buildTable(failed)}
+    <div style="font-family:sans-serif;max-width:1000px;margin:auto;padding:20px">
+      <div style="background:#1a1a2e;color:white;padding:15px 20px;border-radius:8px;margin-bottom:20px">
+        <h2 style="margin:0">📦 Daily Order Report — ${today}</h2>
+        <p style="margin:5px 0 0;opacity:0.7;font-size:13px">
+          Unfulfilled/Partial: last 30 days &nbsp;|&nbsp; 
+          Failed Delivery: last 30 days &nbsp;|&nbsp; 
+          Not Delivered: placed 7+ days ago
+        </p>
+      </div>
+
+      ${section("🔴", "Unfulfilled Orders — Last 30 Days", "#c0392b", unfulfilled.length, buildTable(unfulfilled))}
+      ${section("🟡", "Partially Fulfilled Orders — Last 30 Days", "#d68910", partial.length, buildTable(partial))}
+      ${section("❌", "Failed Deliveries — Last 30 Days", "#8e44ad", failed.length, buildTable(failed))}
+      ${section("📦", "Fulfilled but Not Delivered — Placed 7+ Days Ago", "#2980b9", fulfilledNotDelivered.length, buildTable(fulfilledNotDelivered))}
+
+      <p style="color:#aaa;font-size:12px;margin-top:30px;border-top:1px solid #eee;padding-top:10px">
+        This is an automated daily report from your Shopify store (bakecosmetics.com)
+      </p>
+    </div>
   `;
 
   const transporter = nodemailer.createTransport({
@@ -64,13 +134,17 @@ async function main() {
   });
 
   await transporter.sendMail({
-    from: GMAIL_USER,
+    from: `"Bake Cosmetics Reports" <${GMAIL_USER}>`,
     to: REPORT_TO,
-    subject: `Shopify Order Report — ${today}`,
+    subject: `📦 Daily Order Report — ${today}`,
     html
   });
 
-  console.log(`✅ Report sent: ${unfulfilled.length} unfulfilled, ${partial.length} partial, ${failed.length} failed`);
+  console.log(`✅ Report sent:
+    - Unfulfilled: ${unfulfilled.length}
+    - Partial: ${partial.length}
+    - Failed delivery: ${failed.length}
+    - Fulfilled not delivered: ${fulfilledNotDelivered.length}`);
 }
 
 main().catch(console.error);
