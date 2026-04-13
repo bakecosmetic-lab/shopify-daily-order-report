@@ -1,4 +1,4 @@
-const SHOPIFY_STORE = "your-store.myshopify.com"; // ← your store
+const SHOPIFY_STORE = "0a17b5.myshopify.com"; // ← your store
 const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;
 
 async function debug() {
