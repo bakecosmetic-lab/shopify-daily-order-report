@@ -129,6 +129,16 @@ async function main() {
     limit: 250
   });
 
+  // Temporary debug — remove after confirming
+  console.log(`PRINTING DEBUG FOR SHIPMENT STATUS`);
+allRecentOrders.forEach(o => {
+  if (o.fulfillments?.length) {
+    o.fulfillments.forEach(f => {
+      console.log(`Order #${o.order_number} | shipment_status: ${f.shipment_status} | tracking: ${f.tracking_number} | status: ${f.status} | ALL FIELDS: ${JSON.stringify(f)}`);
+    });
+  }
+});
+
   const failed = allRecentOrders.filter(o =>
   o.fulfillments && o.fulfillments.some(f =>
     f.shipment_status === "failure" || 
@@ -154,26 +164,18 @@ const fulfilledOrders = await fetchOrders({
   limit: 250
 });
 
-// Merge and deduplicate
-const mergedOrders = [...fulfilledNotDelivered, ...fulfilledOrders]
-  .filter((o, index, self) => index === self.findIndex(t => t.id === o.id));
+// Merge, deduplicate, and exclude delivered orders
+const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
+  .filter((o, index, self) => index === self.findIndex(t => t.id === o.id))
+  .filter(o => {
+    if (!o.fulfillments || o.fulfillments.length === 0) return true;
+    // Exclude if any fulfillment is confirmed delivered
+    return !o.fulfillments.some(f => 
+      f.shipment_status === "delivered" ||
+      f.shipment_status === "out_for_delivery" // optional: remove this line if you want to keep these
+    );
+  });
 
-// Step 1: Local filter — remove orders already marked delivered/out_for_delivery
-const initialFiltered = mergedOrders.filter(o => {
-  if (!o.fulfillments || o.fulfillments.length === 0) return true;
-  // Keep orders where NO fulfillment is delivered or out_for_delivery
-  return !o.fulfillments.some(f =>
-    f.shipment_status === "delivered" ||
-    f.shipment_status === "out_for_delivery"
-  );
-});
-
-console.log(`After initial filter: ${initialFiltered.length} orders remaining`);
-
-// Step 2: Double-check remaining orders with DTDC tracking API
-const notDelivered = await verifyWithDTDC(initialFiltered);
-
-console.log(`After DTDC verification: ${notDelivered.length} orders remaining`);
   
   const today = new Date().toDateString();
 
@@ -223,68 +225,4 @@ console.log(`After DTDC verification: ${notDelivered.length} orders remaining`);
     - Fulfilled not delivered: ${notDelivered.length}`);
 }
 
-// Step 2: Double-check remaining orders with DTDC tracking API
-async function verifyWithDTDC(filteredOrders) {
-  const verifiedOrders = [];
-
-  for (const order of filteredOrders) {
-    // Extract tracking numbers from fulfillments
-    const trackingNumbers = order.fulfillments
-      .map(f => f.tracking_number)
-      .filter(Boolean);
-
-    let isDeliveredOrOutForDelivery = false;
-
-    for (const trackingNumber of trackingNumbers) {
-      try {
-        const dtdcStatus = await getDTDCStatus(trackingNumber);
-
-        if (
-          dtdcStatus === "delivered" ||
-          dtdcStatus === "out_for_delivery" ||
-          dtdcStatus === "Delivered" ||
-          dtdcStatus === "Out For Delivery"
-        ) {
-          isDeliveredOrOutForDelivery = true;
-          console.log(`Order ${order.id} (AWB: ${trackingNumber}) is "${dtdcStatus}" per DTDC. Removing.`);
-          break; // No need to check other tracking numbers
-        }
-      } catch (error) {
-        console.error(`Failed to check DTDC tracking for AWB: ${trackingNumber}`, error);
-        // Keep the order if API call fails (safe approach)
-      }
-    }
-
-    // Only keep orders that are NOT delivered/out_for_delivery per DTDC
-    if (!isDeliveredOrOutForDelivery) {
-      verifiedOrders.push(order);
-    }
-  }
-
-  return verifiedOrders;
-}
-
-// Step 3: DTDC API call function
-async function getDTDCStatus(trackingNumber) {
-  try {
-    const res = await fetch(
-      `https://tracking.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=getLoadMovementDetails&cType=Consignment&ConsignmentNo=${trackingNumber}`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "application/json, text/javascript, */*"
-        }
-      }
-    );
-    const text = await res.text();
-    const lower = text.toLowerCase();
-
-    if (lower.includes("delivered")) return "Delivered";
-    if (lower.includes("out for delivery")) return "Out For Delivery";
-    if (lower.includes("failed") || lower.includes("undelivered")) return "Failed";
-    return "InTransit";
-  } catch {
-    return null;
-  }
-}
 main().catch(console.error);
