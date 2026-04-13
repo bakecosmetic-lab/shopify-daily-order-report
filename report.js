@@ -24,11 +24,13 @@ async function fetchOrders(params) {
 
 function getTrackingInfo(order) {
   if (!order.fulfillments || order.fulfillments.length === 0) return "—";
-  const tracking = order.fulfillments
-    .map(f => f.tracking_number)
-    .filter(Boolean)
-    .join(", ");
-  return tracking || "—";
+  const links = order.fulfillments
+    .filter(f => f.tracking_number)
+    .map(f => {
+      const url = f.tracking_url || f.tracking_urls?.[0] || `https://track.aftership.com/${f.tracking_number}`;
+      return `<a href="${url}" target="_blank" style="color:#2980b9">Track Order</a>`;
+    });
+  return links.length ? links.join("<br/>") : "—";
 }
 
 function getDeliveryStatus(order) {
@@ -73,7 +75,7 @@ function buildTable(orders, showTracking = false) {
           <th>Total Amount</th>
           <th>Order Date</th>
           <th>Status</th>
-          ${showTracking ? "<th>Tracking ID</th><th>Delivery Status</th>" : ""}
+          ${showTracking ? "<th>Tracking Link</th><th>Delivery Status</th>" : ""}
         </tr>
       </thead>
       <tbody>
