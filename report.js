@@ -145,29 +145,36 @@ allRecentOrders.forEach(o => {
   )
 );
 
-  // 4. Fulfilled but not delivered — placed 7-30 days ago, still open
-  const fulfilledNotDelivered = await fetchOrders({
-    status: "open",
-    fulfillment_status: "shipped",
-    created_at_min: thirtyDaysAgo,
-    created_at_max: sevenDaysAgo,
-    limit: 250
+  // 4. Fulfilled but not delivered — placed 7-30 days ago
+const fulfilledNotDelivered = await fetchOrders({
+  status: "any",
+  fulfillment_status: "shipped",
+  created_at_min: thirtyDaysAgo,
+  created_at_max: sevenDaysAgo,
+  limit: 250
+});
+
+const fulfilledOrders = await fetchOrders({
+  status: "any",
+  fulfillment_status: "fulfilled",
+  created_at_min: thirtyDaysAgo,
+  created_at_max: sevenDaysAgo,
+  limit: 250
+});
+
+// Merge, deduplicate, and exclude delivered orders
+const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
+  .filter((o, index, self) => index === self.findIndex(t => t.id === o.id))
+  .filter(o => {
+    if (!o.fulfillments || o.fulfillments.length === 0) return true;
+    // Exclude if any fulfillment is confirmed delivered
+    return !o.fulfillments.some(f => 
+      f.shipment_status === "delivered" ||
+      f.shipment_status === "out_for_delivery" // optional: remove this line if you want to keep these
+    );
   });
 
-  // Also include 'fulfilled' status orders that are not delivered
-  const fulfilledOrders = await fetchOrders({
-    status: "open",
-    fulfillment_status: "fulfilled",
-    created_at_min: thirtyDaysAgo,
-    created_at_max: sevenDaysAgo,
-    limit: 250
-  });
-
-  // Merge and deduplicate
-  const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders].filter((o, index, self) =>
-    index === self.findIndex(t => t.id === o.id)
-  );
-
+  
   const today = new Date().toDateString();
 
   const section = (emoji, title, color, count, table) => `
