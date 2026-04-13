@@ -64,7 +64,7 @@ function buildTable(orders, showTracking = false) {
             : "—";
           return `
             <tr>
-              <td><a href="https://${SHOPIFY_STORE}/admin/orders/${o.id}">#${o.order_number}</a></td>
+              <td><a href="https://admin.shopify.com/store/0a17b5/orders/${o.id}" target="_blank">#${o.order_number}</a></td>
               <td>${addr?.name || o.billing_address?.name || "—"}</td>
               <td>${o.email || "—"}</td>
               <td>${addr?.phone || o.phone || "—"}</td>
@@ -105,6 +105,15 @@ async function main() {
     created_at_min: thirtyDaysAgo,
     limit: 250
   });
+
+  // Temporary debug — remove after confirming
+allRecentOrders.forEach(o => {
+  if (o.fulfillments?.length) {
+    o.fulfillments.forEach(f => {
+      console.log(`Order #${o.order_number} | shipment_status: ${f.shipment_status} | tracking: ${f.tracking_number}`);
+    });
+  }
+});
 
   const failed = allRecentOrders.filter(o =>
   o.fulfillments && o.fulfillments.some(f =>
