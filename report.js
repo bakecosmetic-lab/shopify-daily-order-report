@@ -275,34 +275,26 @@ async function verifyWithDTDC(filteredOrders) {
 }
 
 // Step 3: DTDC API call function
-async function checkDTDCTracking(trackingNumber) {
-  const response = await fetch('https://blabornet.dtdc.com/Abornet/home/tracker', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Access-Token': 'YOUR_DTDC_API_TOKEN', // Replace with your token
-    },
-    body: JSON.stringify({
-      trkType: '0',           // 0 = tracking by AWB number
-      strcnno: trackingNumber, // AWB / consignment number
-      addtnlDtl: 'Y',
-    }),
-  });
+async function getDTDCStatus(trackingNumber) {
+  try {
+    const res = await fetch(
+      `https://tracking.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=getLoadMovementDetails&cType=Consignment&ConsignmentNo=${trackingNumber}`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/json, text/javascript, */*"
+        }
+      }
+    );
+    const text = await res.text();
+    const lower = text.toLowerCase();
 
-  if (!response.ok) {
-    throw new Error(`DTDC API error: ${response.status}`);
+    if (lower.includes("delivered")) return "Delivered";
+    if (lower.includes("out for delivery")) return "Out For Delivery";
+    if (lower.includes("failed") || lower.includes("undelivered")) return "Failed";
+    return "InTransit";
+  } catch {
+    return null;
   }
-
-  const data = await response.json();
-
-  // Parse DTDC response to extract latest status
-  // Adjust based on actual DTDC API response structure
-  if (data && data.trackDetails && data.trackDetails.length > 0) {
-    const latestStatus = data.trackDetails[0].strStatus; // e.g., "Delivered", "Out For Delivery"
-    return latestStatus;
-  }
-
-  return "unknown";
 }
-
 main().catch(console.error);
