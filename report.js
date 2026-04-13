@@ -170,10 +170,18 @@ const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
   .filter(o => {
     if (!o.fulfillments || o.fulfillments.length === 0) return true;
     // Exclude if any fulfillment is confirmed delivered
-    return !o.fulfillments.some(f => 
+    // First filter: local shipment_status check
+  const initialFiltered = orders.filter(o => {
+    return !o.fulfillments.some(f =>
       f.shipment_status === "delivered" ||
-      f.shipment_status === "out_for_delivery" // optional: remove this line if you want to keep these
+      f.shipment_status === "out_for_delivery"
     );
+  });
+  console.log(`After initial filter: ${initialFiltered.length} orders remaining`);
+  // Second filter: verify with DTDC API
+  const finalOrders = await verifyWithDTDC(initialFiltered);
+  console.log(`After DTDC verification: ${finalOrders.length} orders remaining`);
+  return finalOrders;
   });
 
   
@@ -223,6 +231,78 @@ const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
     - Partial: ${partial.length}
     - Failed delivery: ${failed.length}
     - Fulfilled not delivered: ${notDelivered.length}`);
+}
+
+// Step 2: Double-check remaining orders with DTDC tracking API
+async function verifyWithDTDC(filteredOrders) {
+  const verifiedOrders = [];
+
+  for (const order of filteredOrders) {
+    // Extract tracking numbers from fulfillments
+    const trackingNumbers = order.fulfillments
+      .map(f => f.tracking_number)
+      .filter(Boolean);
+
+    let isDeliveredOrOutForDelivery = false;
+
+    for (const trackingNumber of trackingNumbers) {
+      try {
+        const dtdcStatus = await checkDTDCTracking(trackingNumber);
+
+        if (
+          dtdcStatus === "delivered" ||
+          dtdcStatus === "out_for_delivery" ||
+          dtdcStatus === "Delivered" ||
+          dtdcStatus === "Out For Delivery"
+        ) {
+          isDeliveredOrOutForDelivery = true;
+          console.log(`Order ${order.id} (AWB: ${trackingNumber}) is "${dtdcStatus}" per DTDC. Removing.`);
+          break; // No need to check other tracking numbers
+        }
+      } catch (error) {
+        console.error(`Failed to check DTDC tracking for AWB: ${trackingNumber}`, error);
+        // Keep the order if API call fails (safe approach)
+      }
+    }
+
+    // Only keep orders that are NOT delivered/out_for_delivery per DTDC
+    if (!isDeliveredOrOutForDelivery) {
+      verifiedOrders.push(order);
+    }
+  }
+
+  return verifiedOrders;
+}
+
+// Step 3: DTDC API call function
+async function checkDTDCTracking(trackingNumber) {
+  const response = await fetch('https://blabornet.dtdc.com/Abornet/home/tracker', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Access-Token': 'YOUR_DTDC_API_TOKEN', // Replace with your token
+    },
+    body: JSON.stringify({
+      trkType: '0',           // 0 = tracking by AWB number
+      strcnno: trackingNumber, // AWB / consignment number
+      addtnlDtl: 'Y',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DTDC API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  // Parse DTDC response to extract latest status
+  // Adjust based on actual DTDC API response structure
+  if (data && data.trackDetails && data.trackDetails.length > 0) {
+    const latestStatus = data.trackDetails[0].strStatus; // e.g., "Delivered", "Out For Delivery"
+    return latestStatus;
+  }
+
+  return "unknown";
 }
 
 main().catch(console.error);
