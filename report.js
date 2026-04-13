@@ -179,7 +179,7 @@ const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
   });
   console.log(`After initial filter: ${initialFiltered.length} orders remaining`);
   // Second filter: verify with DTDC API
-  const finalOrders = await verifyWithDTDC(initialFiltered);
+  const finalOrders = verifyWithDTDC(initialFiltered);
   console.log(`After DTDC verification: ${finalOrders.length} orders remaining`);
   return finalOrders;
   });
