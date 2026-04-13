@@ -164,24 +164,26 @@ const fulfilledOrders = await fetchOrders({
   limit: 250
 });
 
-// Merge, deduplicate, and exclude delivered orders
-const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
-  .filter((o, index, self) => index === self.findIndex(t => t.id === o.id))
-  .filter(o => {
-    if (!o.fulfillments || o.fulfillments.length === 0) return true;
-    // Exclude if any fulfillment is confirmed delivered
-    // First filter: local shipment_status check
-  const initialFiltered = !o.fulfillments.some(f =>
-      f.shipment_status === "delivered" ||
-      f.shipment_status === "out_for_delivery"
-    );
-  console.log(`After initial filter: ${initialFiltered.length} orders remaining`);
-  // Second filter: verify with DTDC API
-  const finalOrders = verifyWithDTDC(initialFiltered);
-  console.log(`After DTDC verification: ${finalOrders.length} orders remaining`);
-  return finalOrders;
-  });
+// Merge and deduplicate
+const mergedOrders = [...fulfilledNotDelivered, ...fulfilledOrders]
+  .filter((o, index, self) => index === self.findIndex(t => t.id === o.id));
 
+// Step 1: Local filter — remove orders already marked delivered/out_for_delivery
+const initialFiltered = mergedOrders.filter(o => {
+  if (!o.fulfillments || o.fulfillments.length === 0) return true;
+  // Keep orders where NO fulfillment is delivered or out_for_delivery
+  return !o.fulfillments.some(f =>
+    f.shipment_status === "delivered" ||
+    f.shipment_status === "out_for_delivery"
+  );
+});
+
+console.log(`After initial filter: ${initialFiltered.length} orders remaining`);
+
+// Step 2: Double-check remaining orders with DTDC tracking API
+const notDelivered = await verifyWithDTDC(initialFiltered);
+
+console.log(`After DTDC verification: ${notDelivered.length} orders remaining`);
   
   const today = new Date().toDateString();
 
