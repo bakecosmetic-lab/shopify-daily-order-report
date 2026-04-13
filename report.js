@@ -111,7 +111,7 @@ async function main() {
 allRecentOrders.forEach(o => {
   if (o.fulfillments?.length) {
     o.fulfillments.forEach(f => {
-      console.log(`Order #${o.order_number} | shipment_status: ${f.shipment_status} | delivery_status: ${f.delivery_status} | tracking: ${f.tracking_number}`);
+      console.log(`Order #${o.order_number} | shipment_status: ${f.shipment_status} | tracking: ${f.tracking_number} | status: ${f.status} | ALL FIELDS: ${JSON.stringify(f)}`);
     });
   }
 });
