@@ -129,16 +129,6 @@ async function main() {
     limit: 250
   });
 
-  // Temporary debug — remove after confirming
-  console.log(`PRINTING DEBUG FOR SHIPMENT STATUS`);
-allRecentOrders.forEach(o => {
-  if (o.fulfillments?.length) {
-    o.fulfillments.forEach(f => {
-      console.log(`Order #${o.order_number} | shipment_status: ${f.shipment_status} | tracking: ${f.tracking_number} | status: ${f.status} | ALL FIELDS: ${JSON.stringify(f)}`);
-    });
-  }
-});
-
   const failed = allRecentOrders.filter(o =>
   o.fulfillments && o.fulfillments.some(f =>
     f.shipment_status === "failure" || 
@@ -247,7 +237,7 @@ async function verifyWithDTDC(filteredOrders) {
 
     for (const trackingNumber of trackingNumbers) {
       try {
-        const dtdcStatus = await checkDTDCTracking(trackingNumber);
+        const dtdcStatus = await getDTDCStatus(trackingNumber);
 
         if (
           dtdcStatus === "delivered" ||
