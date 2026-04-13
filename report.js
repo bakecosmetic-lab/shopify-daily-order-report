@@ -37,6 +37,27 @@ function getDeliveryStatus(order) {
   return statuses;
 }
 
+// Fetch a specific order to see all fields
+async function debugOrder() {
+  // Replace with actual order ID (not order number)
+  const res = await fetch(
+    `https://${SHOPIFY_STORE}/admin/api/2026-04/orders/7243955208496.json`,
+    { headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN } }
+  );
+  const data = await res.json();
+  const order = data.orders?.[0];
+  if (!order) return console.log("Order not found");
+
+  console.log("ORDER TAGS:", order.tags);
+  console.log("FINANCIAL STATUS:", order.financial_status);
+  console.log("FULFILLMENT STATUS:", order.fulfillment_status);
+  order.fulfillments?.forEach(f => {
+    console.log("FULFILLMENT:", JSON.stringify(f));
+  });
+}
+
+debugOrder().catch(console.error);
+
 function buildTable(orders, showTracking = false) {
   if (!orders.length) return "<p style='color:#888'>None</p>";
   return `
