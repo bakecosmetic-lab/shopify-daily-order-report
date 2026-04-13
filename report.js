@@ -171,12 +171,10 @@ const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
     if (!o.fulfillments || o.fulfillments.length === 0) return true;
     // Exclude if any fulfillment is confirmed delivered
     // First filter: local shipment_status check
-  const initialFiltered = orders.filter(o => {
-    return !o.fulfillments.some(f =>
+  const initialFiltered = !o.fulfillments.some(f =>
       f.shipment_status === "delivered" ||
       f.shipment_status === "out_for_delivery"
     );
-  });
   console.log(`After initial filter: ${initialFiltered.length} orders remaining`);
   // Second filter: verify with DTDC API
   const finalOrders = verifyWithDTDC(initialFiltered);
