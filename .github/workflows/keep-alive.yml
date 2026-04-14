@@ -2,17 +2,20 @@ name: Keep Alive
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # runs daily at 2 AM UTC
+    - cron: '0 2 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Keep repo active
-        run: echo "Keeping repo alive - $(date)"
-      - name: Commit keep-alive
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
