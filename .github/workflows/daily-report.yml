@@ -2,7 +2,7 @@ name: Daily Shopify Order Report
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # Every day at 6:00 AM UTC — adjust to your timezone
+    - cron: '45 5 * * *'   # Every day at 6:00 AM UTC — adjust to your timezone
   workflow_dispatch:        # Allows manual trigger from GitHub UI
 
 jobs:
