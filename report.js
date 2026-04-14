@@ -125,7 +125,8 @@ async function main() {
   // 3. Failed delivery — fetch all recent orders and filter by fulfillment shipment_status
   const allRecentOrders = await fetchOrders({
     status: "any",
-    created_at_min: thirtyDaysAgo
+    created_at_min: thirtyDaysAgo,
+    limit: 500
   });
 
   const failed = allRecentOrders.filter(o =>
