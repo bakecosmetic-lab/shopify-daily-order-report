@@ -196,8 +196,8 @@ const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
       </div>
 
       ${section("🔴", "Unfulfilled Orders — Last 30 Days", "#c0392b", unfulfilled.length, buildTable(unfulfilled))}
-      ${section("🟡", "Partially Fulfilled Orders — Last 30 Days", "#d68910", partial.length, buildTable(partial))}
-      ${section("❌", "Failed Deliveries — Last 30 Days", "#8e44ad", failed.length, buildTable(failed, true))}
+      // ${section("🟡", "Partially Fulfilled Orders — Last 30 Days", "#d68910", partial.length, buildTable(partial))}
+      // ${section("❌", "Failed Deliveries — Last 30 Days", "#8e44ad", failed.length, buildTable(failed, true))}
       ${section("📦", "Fulfilled but Not Delivered — Placed 7+ Days Ago", "#2980b9", notDelivered.length, buildTable(notDelivered, true))}
 
       <p style="color:#aaa;font-size:12px;margin-top:30px;border-top:1px solid #eee;padding-top:10px">
