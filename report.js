@@ -125,19 +125,8 @@ async function main() {
   // 3. Failed delivery — fetch all recent orders and filter by fulfillment shipment_status
   const allRecentOrders = await fetchOrders({
     status: "any",
-    created_at_min: thirtyDaysAgo,
-    limit: 250
+    created_at_min: thirtyDaysAgo
   });
-
-  // Temporary debug — remove after confirming
-  console.log(`PRINTING DEBUG FOR SHIPMENT STATUS`);
-allRecentOrders.forEach(o => {
-  if (o.fulfillments?.length) {
-    o.fulfillments.forEach(f => {
-      console.log(`Order #${o.order_number} | shipment_status: ${f.shipment_status} | tracking: ${f.tracking_number} | status: ${f.status} | ALL FIELDS: ${JSON.stringify(f)}`);
-    });
-  }
-});
 
   const failed = allRecentOrders.filter(o =>
   o.fulfillments && o.fulfillments.some(f =>
@@ -196,8 +185,8 @@ const notDelivered = [...fulfilledNotDelivered, ...fulfilledOrders]
       </div>
 
       ${section("🔴", "Unfulfilled Orders — Last 30 Days", "#c0392b", unfulfilled.length, buildTable(unfulfilled))}
-      // ${section("🟡", "Partially Fulfilled Orders — Last 30 Days", "#d68910", partial.length, buildTable(partial))}
-      // ${section("❌", "Failed Deliveries — Last 30 Days", "#8e44ad", failed.length, buildTable(failed, true))}
+      ${section("🟡", "Partially Fulfilled Orders — Last 30 Days", "#d68910", partial.length, buildTable(partial))}
+      ${section("❌", "Failed Deliveries — Last 30 Days", "#8e44ad", failed.length, buildTable(failed, true))}
       ${section("📦", "Fulfilled but Not Delivered — Placed 7+ Days Ago", "#2980b9", notDelivered.length, buildTable(notDelivered, true))}
 
       <p style="color:#aaa;font-size:12px;margin-top:30px;border-top:1px solid #eee;padding-top:10px">
